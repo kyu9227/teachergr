@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>교사 성과상여금 결과 확인</title>
+    <!-- 외부 스타일 시트 연결 -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Excel 처리를 위한 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* 추가 스타일 */
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            font-weight: bold;
+            min-height: 24px;
+            white-space: pre-line;
+            line-height: 1.6;
+        }
+        .file-selector {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 2px dashed #007bff;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        .file-selector label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.85em;
+            color: #555;
+        }
+        input[type="file"] {
+            width: 100%;
+            font-size: 0.8em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>성과상여금 결과 확인</h1>
+        
+        <!-- 보안 오류 방지를 위해 파일을 직접 선택하는 방식 추가 -->
+        <div class="file-selector">
+            <label for="excelFile">먼저 'teachergr.xlsx' 파일을 선택하세요.</label>
+            <input type="file" id="excelFile" accept=".xlsx, .xls, .csv">
+        </div>
+
+        <p>주민등록번호(13자리)와 이름을 입력하세요.</p>
+        
+        <input type="text" id="idNumber" placeholder="주민등록번호 (예: 6912292773113)" maxlength="13">
+        <input type="text" id="teacherName" placeholder="이름 (예: 이경희)">
+        <button onclick="checkBonus()">확인</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        /**
+         * 선택된 엑셀 파일을 읽고 입력 정보와 대조하는 함수
+         */
+        async function checkBonus() {
+            const fileInput = document.getElementById('excelFile');
+            const idNumberInput = document.getElementById('idNumber').value.trim();
+            const teacherNameInput = document.getElementById('teacherName').value.trim();
+            const resultDiv = document.getElementById('result');
+
+            // 1. 파일 선택 확인
+            if (!fileInput.files || fileInput.files.length === 0) {
+                resultDiv.textContent = "'teachergr.xlsx' 파일을 먼저 선택해 주세요.";
+                resultDiv.style.color = "orange";
+                return;
+            }
+
+            // 2. 입력 유효성 검사
+            if (!idNumberInput || !teacherNameInput) {
+                resultDiv.textContent = "주민번호와 이름을 모두 입력해주세요.";
+                resultDiv.style.color = "orange";
+                return;
+            }
+
+            if (idNumberInput.length !== 13) {
+                resultDiv.textContent = "주민등록번호 13자리를 정확히 입력해주세요.";
+                resultDiv.style.color = "orange";
+                return;
+            }
+
+            resultDiv.textContent = "데이터 대조 중...";
+            resultDiv.style.color = "#666";
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                    // 데이터 대조
+                    const foundUser = jsonData.find(row => {
+                        // '생년월일' 혹은 '주민등록번호' 컬럼 대응
+                        const rowId = String(row['생년월일'] || row['주민등록번호'] || "").replace(/[^0-9]/g, "").trim();
+                        const rowName = String(row['이름'] || "").trim();
+                        return rowId === idNumberInput && rowName === teacherNameInput;
+                    });
+
+                    if (foundUser) {
+                        const grade = foundUser['등급'] || '정보 없음';
+                        resultDiv.innerHTML = `<span style="color:#333">${foundUser['이름']} 선생님의 등급은</span><br><span style="font-size:1.5em; color:#007bff;">[${grade}]</span> 입니다.`;
+                        resultDiv.style.color = "black";
+                    } else {
+                        resultDiv.textContent = "일치하는 정보가 없습니다.\n입력 정보를 다시 확인하세요.";
+                        resultDiv.style.color = "red";
+                    }
+                } catch (err) {
+                    resultDiv.textContent = "파일을 읽는 중 오류가 발생했습니다: " + err.message;
+                    resultDiv.style.color = "red";
+                }
+            };
+
+            reader.onerror = function() {
+                resultDiv.textContent = "파일 로드에 실패했습니다.";
+                resultDiv.style.color = "red";
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 엔터키 지원
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') checkBonus();
+            });
+        });
+    </script>
+</body>
+</html>
