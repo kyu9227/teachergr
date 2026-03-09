@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -19,13 +19,10 @@
             line-height: 1.6;
         }
         .status-msg {
-            font-size: 0.85em;
-            color: #666;
-            margin-bottom: 10px;
-            padding: 8px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            border: 1px solid #eee;
+            font-size: 0.8em;
+            color: #888;
+            margin-bottom: 15px;
+            padding: 5px;
         }
         .error-box {
             color: #d9534f;
@@ -35,7 +32,6 @@
             font-size: 0.8em;
             margin-bottom: 15px;
             display: none;
-            text-align: left;
         }
     </style>
 </head>
@@ -44,69 +40,73 @@
         <h1>성과상여금 등급 확인</h1>
         <p>본인의 성명과 주민등록번호를 입력하세요.</p>
         
-        <!-- 데이터 로딩 상태 표시 -->
-        <div id="fileStatus" class="status-msg">시스템 초기화 중...</div>
+        <!-- 로딩 상태 표시줄 -->
+        <div id="fileStatus" class="status-msg">데이터 로딩 중...</div>
         <div id="errorDisplay" class="error-box"></div>
 
+        <!-- 입력 영역 -->
         <input type="text" id="teacherName" placeholder="예: 홍길동">
         <input type="text" id="idNumber" placeholder="예: 주민번호(- 생략)">
         
         <button id="checkBtn" onclick="checkGrade()" disabled>등급 확인하기</button>
 
+        <!-- 결과 표시 영역 -->
         <div id="result"></div>
     </div>
 
     <script>
         let cachedData = null;
-        // 깃허브 레포지토리에 업로드된 파일명 (동일 경로에 있어야 함)
-        const EXCEL_FILE_NAME = 'teachergr.xlsx';
-
-        // 페이지 로드 시 엑셀 파일 자동 로드
-        async function initSystem() {
+        
+        /**
+         * 깃허브 서버에서 엑셀 파일을 가져오는 함수
+         */
+        async function loadExcelData() {
             const statusDiv = document.getElementById('fileStatus');
             const errorDisplay = document.getElementById('errorDisplay');
             const checkBtn = document.getElementById('checkBtn');
 
+            // 깃허브 레포지토리에 업로드한 파일명
+            const fileName = 'teachergr.xlsx';
+            
             try {
-                // 깃허브 서버에서 파일을 가져옴
-                const response = await fetch(EXCEL_FILE_NAME, { cache: "no-cache" });
+                // 현재 도메인/경로 기반으로 fetch 시도
+                const response = await fetch(fileName, { cache: "no-cache" });
                 
                 if (!response.ok) {
-                    throw new Error(`파일을 찾을 수 없습니다 (HTTP ${response.status}).`);
+                    throw new Error(`파일을 찾을 수 없습니다 (HTTP ${response.status}). 깃허브 레포지토리에 '${fileName}'이 있는지 확인하세요.`);
                 }
                 
                 const arrayBuffer = await response.arrayBuffer();
                 const data = new Uint8Array(arrayBuffer);
                 const workbook = XLSX.read(data, { type: 'array' });
                 
-                // 첫 번째 시트 데이터 추출
-                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                cachedData = XLSX.utils.sheet_to_json(worksheet);
+                // 첫 번째 시트 데이터 변환
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                cachedData = XLSX.utils.sheet_to_json(firstSheet);
                 
                 if (!cachedData || cachedData.length === 0) {
-                    throw new Error("파일에 유효한 데이터가 없습니다.");
+                    throw new Error("엑셀 파일에 유효한 데이터가 없습니다.");
                 }
 
-                statusDiv.textContent = "조회 준비 완료";
+                statusDiv.textContent = "● 데이터 연결 완료";
                 statusDiv.style.color = "#28a745";
-                checkBtn.disabled = false;
-                errorDisplay.style.display = "none";
+                checkBtn.disabled = false; // 조회 버튼 활성화
 
             } catch (err) {
-                statusDiv.textContent = "시스템 오류";
+                statusDiv.textContent = "● 시스템 오류";
                 statusDiv.style.color = "#d9534f";
                 errorDisplay.style.display = "block";
-                errorDisplay.innerHTML = `
-                    <strong>데이터 로드 실패:</strong> ${err.message}<br>
-                    관리자에게 문의하시거나 파일 업로드 상태를 확인하세요.
-                `;
-                console.error("Initialization Error:", err);
+                errorDisplay.innerHTML = `<strong>로드 실패:</strong> ${err.message}`;
+                console.error("Init Error:", err);
             }
         }
 
+        /**
+         * 등급 조회 로직
+         */
         function checkGrade() {
-            const teacherNameInput = document.getElementById('teacherName').value.trim();
-            const idNumberInput = document.getElementById('idNumber').value.trim();
+            const name = document.getElementById('teacherName').value.trim();
+            const idInput = document.getElementById('idNumber').value.trim();
             const resultDiv = document.getElementById('result');
 
             if (!cachedData) {
@@ -115,39 +115,41 @@
                 return;
             }
 
-            if (!teacherNameInput || !idNumberInput) {
+            if (!name || !idInput) {
                 resultDiv.textContent = "성명과 주민등록번호를 모두 입력하세요.";
                 resultDiv.style.color = "red";
                 return;
             }
 
-            // 주민번호에서 숫자만 추출하여 비교
-            const searchId = idNumberInput.replace(/[^0-9]/g, "");
+            // 입력값에서 숫자만 추출
+            const searchId = idInput.replace(/[^0-9]/g, "");
 
-            // 데이터 검색
-            const foundUser = cachedData.find(row => {
+            // 엑셀 데이터에서 일치하는 사람 찾기
+            const user = cachedData.find(row => {
                 const rowId = String(row['주민등록번호'] || row['주민번호'] || "").replace(/[^0-9]/g, "").trim();
                 const rowName = String(row['이름'] || row['성명'] || "").trim();
-                return rowId === searchId && rowName === teacherNameInput;
+                return rowId === searchId && rowName === name;
             });
 
-            if (foundUser) {
-                const grade = foundUser['등급'] || '정보 없음';
+            if (user) {
+                const grade = user['등급'] || '정보 없음';
                 resultDiv.innerHTML = `
-                    <span style="color:#555">${foundUser['이름']} 선생님의 확인 결과</span><br>
-                    성과 등급: <span style="font-size:1.5em; color:#007bff;">[${grade}]</span>
+                    <div style="border-top: 1px solid #eee; padding-top: 15px;">
+                        <span style="color:#666; font-size: 0.9em;">${user['이름']} 선생님의 확인 결과</span><br>
+                        성과 등급: <span style="font-size:1.6em; color:#007bff;">[${grade}]</span>
+                    </div>
                 `;
                 resultDiv.style.color = "black";
             } else {
-                resultDiv.textContent = "일치하는 정보가 없습니다.\n성명과 번호를 다시 확인해 주세요.";
+                resultDiv.textContent = "일치하는 정보가 없습니다.\n성명 또는 주민번호를 확인해 주세요.";
                 resultDiv.style.color = "red";
             }
         }
 
-        // 초기화 실행
-        window.addEventListener('load', initSystem);
+        // 페이지 로드 즉시 실행
+        window.addEventListener('load', loadExcelData);
 
-        // 엔터키 지원
+        // 엔터키 처리
         document.querySelectorAll('input').forEach(input => {
             input.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter' && !document.getElementById('checkBtn').disabled) {
